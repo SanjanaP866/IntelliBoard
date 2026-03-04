@@ -31,17 +31,17 @@ export default function AuthPage({ darkMode, toggleDarkMode }) {
   };
 
   return (
-    <div style={styles.page}>
+    <div style={styles.page} className="auth-page">
       {/* Background grid */}
       <div style={styles.grid} />
 
-      <div style={styles.left}>
+      <div style={styles.left} className="auth-left">
         <div style={styles.logo}>
           <span style={styles.logoIcon}>⬡</span>
           <span style={styles.logoText}>IntelliBoard</span>
           <button onClick={toggleDarkMode} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,marginLeft:8}} title="Toggle theme">{darkMode ? "☀️" : "🌙"}</button>
         </div>
-        <h1 style={styles.tagline}>
+        <h1 style={styles.tagline} className="auth-tagline">
           Real-Time<br />
           <span style={{ color: "var(--accent)" }}>Collaborative</span><br />
           Diagramming
@@ -59,8 +59,12 @@ export default function AuthPage({ darkMode, toggleDarkMode }) {
         </div>
       </div>
 
-      <div style={styles.right}>
-        <div className="card" style={styles.authCard}>
+      <div style={styles.right} className="auth-right">
+        <div className="auth-mobile-logo">
+          <span style={{ fontSize: 22, color: "var(--accent)" }}>⬡</span>
+          <span style={{ fontWeight: 800, fontSize: 18 }}>IntelliBoard</span>
+        </div>
+        <div className="card auth-card" style={styles.authCard}>
           <div style={styles.tabs}>
             <button
               style={{ ...styles.tab, ...(isLogin ? styles.tabActive : {}) }}

@@ -64,6 +64,13 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
     strokeWidthRef.current = strokeWidth;
   }, [strokeWidth]);
 
+  // Text size — mirrors the strokeWidth pattern
+  const [textSize, setTextSize] = useState(16);
+  const textSizeRef = useRef(16);
+  useEffect(() => {
+    textSizeRef.current = textSize;
+  }, [textSize]);
+
   const shiftRef = useRef(false);
   const [shiftHeld, setShiftHeld] = useState(false);
 
@@ -739,7 +746,7 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
         height: tb.height,
         text: text.trim(),
         stroke: strokeColorRef.current,
-        fontSize: 16,
+        fontSize: textSizeRef.current,
         wrap: "word",
       });
     },
@@ -812,22 +819,63 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
 
   const handleExportPDF = () => {
     const stage = stageRef.current;
-    // FIX #3: Export at 1:1 with background color so no black areas
+
+    // Compute union bounding box of every shape on the board
+    const allShapes = getCommitted().filter(Boolean);
+    if (!allShapes.length) {
+      alert("Nothing to export — draw something first.");
+      return;
+    }
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    allShapes.forEach((s) => {
+      const b = getShapeBounds(s);
+      if (!b) return;
+      minX = Math.min(minX, b.x);
+      minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.w);
+      maxY = Math.max(maxY, b.y + b.h);
+    });
+
+    // Add padding around the content
+    const PAD = 40;
+    minX -= PAD; minY -= PAD;
+    maxX += PAD; maxY += PAD;
+
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+
+    // Save current stage transform
     const savedScale = stage.scaleX();
-    const savedX = stage.x(),
-      savedY = stage.y();
-    // Reset to show all content
+    const savedX = stage.x();
+    const savedY = stage.y();
+
+    // Position stage so the content bounding box starts at screen (0,0) at scale 1
+    // stage.position moves the canvas element; at scale 1 world unit = screen pixel.
+    // To put world point (minX, minY) at screen (0, 0): stagePos = (-minX, -minY)
     stage.scale({ x: 1, y: 1 });
-    stage.position({ x: 0, y: 0 });
-    const url = stage.toDataURL({ pixelRatio: 1.5, mimeType: "image/png" });
+    stage.position({ x: -minX, y: -minY });
+
+    const url = stage.toDataURL({
+      x: 0,
+      y: 0,
+      width: contentW,
+      height: contentH,
+      pixelRatio: 1.5,
+      mimeType: "image/png",
+    });
+
+    // Restore stage transform
     stage.scale({ x: savedScale, y: savedScale });
     stage.position({ x: savedX, y: savedY });
+
+    // Create PDF sized to the content
     const pdf = new jsPDF({
-      orientation: "landscape",
+      orientation: contentW >= contentH ? "landscape" : "portrait",
       unit: "px",
-      format: [stage.width(), stage.height()],
+      format: [contentW, contentH],
     });
-    pdf.addImage(url, "PNG", 0, 0, stage.width(), stage.height());
+    pdf.addImage(url, "PNG", 0, 0, contentW, contentH);
     pdf.save(`${boardTitle || "board"}.pdf`);
   };
 
@@ -921,6 +969,8 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
         setFillEnabled={setFillEnabled}
         strokeWidth={strokeWidth}
         setStrokeWidth={setStrokeWidth}
+        textSize={textSize}
+        setTextSize={setTextSize}
         onImageUpload={handleImageUpload}
         onUndo={undo}
         onRedo={redo}
@@ -1295,6 +1345,7 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
 
         {/* Zoom + Fit */}
         <div
+          className="bp-zoom-ctrl"
           style={{
             position: "absolute",
             bottom: 16,
@@ -1355,6 +1406,7 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
         {/* ── Permissions panel (owner only) ── */}
         {showPerms && isOwner && boardData && (
           <div
+            className="bp-perms-panel"
             style={{
               position: "fixed",
               top: 110,

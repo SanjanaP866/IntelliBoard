@@ -65,12 +65,12 @@ export default function Dashboard({ darkMode, toggleDarkMode }) {
 
   return (
     <div style={styles.page}>
-      <header style={styles.header}>
+      <header style={styles.header} className="dash-header">
         <div style={styles.headerLeft}>
           <span style={{ fontSize: 22, color: "var(--accent)" }}>⬡</span>
           <span style={styles.logo}>IntelliBoard</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }} className="dash-header-right">
           <span style={{ color: "var(--text-muted)", fontSize: 14 }}>
             Welcome, <strong style={{ color: "var(--text)" }}>{user.name}</strong>
           </span>
@@ -81,10 +81,10 @@ export default function Dashboard({ darkMode, toggleDarkMode }) {
         </div>
       </header>
 
-      <main style={styles.main}>
-        <div style={styles.actionsBar}>
-          <h1 style={styles.pageTitle}>My Boards</h1>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+      <main style={styles.main} className="dash-main">
+        <div style={styles.actionsBar} className="dash-actions">
+          <h1 style={styles.pageTitle} className="dash-page-title">My Boards</h1>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }} className="dash-actions-right">
             <button className="btn btn-ghost btn-sm" onClick={() => setShowJoin((v) => !v)}>
               🔗 Join by ID
             </button>
@@ -95,7 +95,7 @@ export default function Dashboard({ darkMode, toggleDarkMode }) {
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createBoard()}
-                style={{ width: 200, padding: "8px 14px" }}
+                style={{ width: 200, padding: "8px 14px" }} className="dash-new-input"
               />
               <button className="btn btn-primary btn-sm" onClick={createBoard} disabled={creating || !newTitle.trim()}>
                 {creating ? <span className="spinner" /> : "+ New Board"}

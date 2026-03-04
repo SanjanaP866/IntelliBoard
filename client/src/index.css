@@ -103,3 +103,133 @@ html, body, #root {
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT — media queries only, no JS changes
+   Breakpoints:
+     sm  : ≤ 600px   (phones)
+     md  : ≤ 900px   (tablets / small laptops)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── AuthPage ───────────────────────────────────────────────────────────── */
+
+/* Tablet: shrink left panel padding, shrink tagline */
+@media (max-width: 900px) {
+  .auth-left  { padding: 40px !important; }
+  .auth-tagline { font-size: 36px !important; letter-spacing: -1px !important; }
+  .auth-right { width: 360px !important; }
+}
+
+/* Phone: stack vertically — hide left panel, center the card */
+@media (max-width: 600px) {
+  .auth-page  { flex-direction: column !important; }
+  .auth-left  { display: none !important; }
+  .auth-right {
+    width: 100% !important;
+    padding: 24px 16px !important;
+    align-items: stretch !important;
+    min-height: 100vh;
+  }
+  .auth-card  { padding: 24px 20px !important; }
+
+  /* Show a minimal logo at top when left panel is hidden */
+  .auth-mobile-logo {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+}
+/* Hide mobile logo on larger screens */
+.auth-mobile-logo { display: none; }
+
+/* ─── Dashboard ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .dash-main  { padding: 24px 20px !important; }
+  .dash-header { padding: 0 20px !important; }
+}
+
+@media (max-width: 600px) {
+  .dash-header {
+    height: auto !important;
+    flex-wrap: wrap !important;
+    padding: 12px 16px !important;
+    gap: 8px !important;
+  }
+  .dash-header-right { flex-wrap: wrap !important; gap: 8px !important; }
+  .dash-main  { padding: 20px 16px !important; }
+  .dash-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+  .dash-actions-right {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+  .dash-new-input { width: 100% !important; }
+  .dash-page-title { font-size: 22px !important; }
+}
+
+/* ─── Toolbar (BoardPage) ────────────────────────────────────────────────── */
+
+/* Tablet: tighten up the top row */
+@media (max-width: 900px) {
+  .tb-top-row  { padding: 6px 12px !important; }
+  .tb-board-title { font-size: 13px !important; }
+  .tb-room-id  { display: none !important; }   /* hide room ID text; copy btn stays */
+  .tb-tools-row { padding: 4px 10px !important; }
+}
+
+/* Phone: collapse top row to single icon + title + actions; hide room ID + copy */
+@media (max-width: 600px) {
+  .tb-top-row  {
+    padding: 5px 10px !important;
+    gap: 6px !important;
+  }
+  .tb-board-info { display: none !important; }  /* hide title+ID block entirely */
+  .tb-top-actions .btn-sm { padding: 5px 8px !important; font-size: 11px !important; }
+  /* Make the tools row scroll smoothly on touch */
+  .tb-tools-row {
+    padding: 4px 8px !important;
+    gap: 2px !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;           /* hide scrollbar on phone */
+  }
+  .tb-tools-row::-webkit-scrollbar { display: none; }
+  /* Shrink tool buttons so more fit on screen */
+  .tb-tool-btn {
+    min-width: 36px !important;
+    padding: 4px 6px !important;
+  }
+  .tb-tool-btn .tb-tool-label { display: none !important; }  /* icon only */
+  /* Sliders: shrink a little */
+  .tb-slider { width: 56px !important; }
+}
+
+/* ─── BoardPage overlays ─────────────────────────────────────────────────── */
+
+/* Permissions panel: full-width bottom sheet on phone */
+@media (max-width: 600px) {
+  .bp-perms-panel {
+    top: auto !important;
+    bottom: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    min-width: unset !important;
+    border-radius: 16px 16px 0 0 !important;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  /* Zoom control: smaller, shift left so it doesn't overlap canvas too much */
+  .bp-zoom-ctrl {
+    right: 8px !important;
+    bottom: 8px !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+    gap: 4px !important;
+  }
+}

@@ -67,6 +67,8 @@ export default function Toolbar({
   setFillEnabled,
   strokeWidth,
   setStrokeWidth,
+  textSize,
+  setTextSize,
   onImageUpload,
   onUndo,
   onRedo,
@@ -87,20 +89,20 @@ export default function Toolbar({
   return (
     <div style={styles.toolbar}>
       {/* ── Top row: nav + board title + actions ── */}
-      <div style={styles.topRow}>
+      <div style={styles.topRow} className="tb-top-row">
         <button onClick={onBack} style={styles.backBtn}>← Dashboard</button>
 
-        <div style={styles.boardInfo}>
-          <span style={styles.boardTitle}>{boardTitle}</span>
+        <div style={styles.boardInfo} className="tb-board-info">
+          <span style={styles.boardTitle} className="tb-board-title">{boardTitle}</span>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} className="tb-room-id">
               {roomId}
             </span>
             <CopyRoomIdBtn roomId={roomId} />
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }} className="tb-top-actions">
           {/* Dark / Light mode toggle */}
           <button
             className="btn btn-ghost btn-sm"
@@ -122,7 +124,7 @@ export default function Toolbar({
       </div>
 
       {/* ── Tools row ── */}
-      <div style={styles.toolsRow}>
+      <div style={styles.toolsRow} className="tb-tools-row">
         {/* Tool buttons */}
         <div style={styles.toolGroup}>
           {toolButtons.map((btn, i) => {
@@ -131,6 +133,7 @@ export default function Toolbar({
               <button
                 key={btn.tool}
                 title={btn.label}
+                className={`tb-tool-btn${activeTool === btn.tool ? " tb-tool-btn-active" : ""}`}
                 style={{
                   ...styles.toolBtn,
                   ...(activeTool === btn.tool ? styles.toolBtnActive : {}),
@@ -142,7 +145,7 @@ export default function Toolbar({
                 }}
               >
                 <span style={{ fontSize: 15 }}>{btn.icon}</span>
-                <span style={{ fontSize: 10 }}>{btn.label}</span>
+                <span style={{ fontSize: 10 }} className="tb-tool-label">{btn.label}</span>
               </button>
             );
           })}
@@ -218,9 +221,30 @@ export default function Toolbar({
             max="20"
             value={strokeWidth}
             onChange={(e) => setStrokeWidth(Number(e.target.value))}
-            style={{ width: 72, accentColor: "var(--accent)" }}
+            style={{ width: 72, accentColor: "var(--accent)" }} className="tb-slider"
           />
           <span style={{ fontSize: 12, color: "var(--text-muted)", minWidth: 18, fontFamily: "var(--font-mono)" }}>{strokeWidth}</span>
+        </div>
+
+        <div style={styles.divider} />
+
+        {/* Text size — only relevant for the Text tool, but always visible for discoverability */}
+        <div style={{
+          ...styles.optionGroup,
+          opacity: activeTool === "text" ? 1 : 0.45,
+          transition: "opacity 0.15s",
+        }}>
+          <label style={styles.optLabel}>Text</label>
+          <input
+            type="range"
+            min="10"
+            max="72"
+            step="2"
+            value={textSize}
+            onChange={(e) => setTextSize(Number(e.target.value))}
+            style={{ width: 72, accentColor: "var(--accent)" }} className="tb-slider"
+          />
+          <span style={{ fontSize: 12, color: "var(--text-muted)", minWidth: 22, fontFamily: "var(--font-mono)" }}>{textSize}</span>
         </div>
 
         <div style={styles.divider} />
