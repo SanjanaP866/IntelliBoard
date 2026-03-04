@@ -15,13 +15,19 @@ const server = http.createServer(app);
 // ─── Socket.IO Setup ──────────────────────────────────────────────────────────
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    // origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
+// app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
+app.use(
+  cors({
+    origin: "*",
+  }),
+);
 app.use(express.json({ limit: "50mb" })); // large images as base64 can be big // larger limit for image uploads
 
 // ─── REST Routes ──────────────────────────────────────────────────────────────
@@ -75,7 +81,7 @@ io.on("connection", (socket) => {
     try {
       await Board.findOneAndUpdate(
         { roomId },
-        { boardState, updatedAt: new Date() }
+        { boardState, updatedAt: new Date() },
       );
     } catch (err) {
       console.error("Error saving board:", err);
