@@ -90,12 +90,12 @@ export default function Dashboard({ darkMode, toggleDarkMode }) {
             </button>
             <div style={{ display: "flex", gap: 8 }}>
               <input
-                className="input"
+                className="input dash-new-input"
                 placeholder="Board title..."
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && createBoard()}
-                style={{ width: 200, padding: "8px 14px" }} className="dash-new-input"
+                style={{ width: 200, padding: "8px 14px" }}
               />
               <button className="btn btn-primary btn-sm" onClick={createBoard} disabled={creating || !newTitle.trim()}>
                 {creating ? <span className="spinner" /> : "+ New Board"}

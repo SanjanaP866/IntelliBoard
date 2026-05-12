@@ -88,6 +88,13 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ── Chat ──────────────────────────────────────────────────────────────────
+  // Relay chat messages to all OTHER users in the same room.
+  // We do NOT persist chat — it is session-only, like a live whiteboard session.
+  socket.on("chat-message", ({ roomId, message }) => {
+    socket.to(roomId).emit("chat-message", message);
+  });
+
   socket.on("disconnect", () => {
     console.log(`🔌 Socket disconnected: ${socket.id}`);
   });

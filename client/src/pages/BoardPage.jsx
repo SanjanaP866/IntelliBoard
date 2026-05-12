@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Stage, Layer, Line, Arrow, Rect as KonvaRect } from "react-konva";
+import { Stage, Layer, Line, Arrow, Rect as KonvaRect, Group } from "react-konva";
 import { v4 as uuidv4 } from "uuid";
 import jsPDF from "jspdf";
 import api from "../api/axios";
@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useHistory } from "../hooks/useHistory";
 import { useSocket } from "../hooks/useSocket";
 import Toolbar, { TOOLS } from "../components/Toolbar";
+import Chat from "../components/Chat";
 import ShapeRenderer from "../components/ShapeRenderer";
 import AnchorPoints from "../components/AnchorPoints";
 
@@ -74,14 +75,19 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
   const shiftRef = useRef(false);
   const [shiftHeld, setShiftHeld] = useState(false);
 
-  const isDrawing = useRef(false);
+  const isDrawing  = useRef(false);
   const currentPath = useRef(null);
-  const drawStart = useRef(null);
+  const drawStart   = useRef(null);
+
+  // Pan-by-drag state (SELECT tool, clicking canvas background)
+  const isPanning   = useRef(false);
+  const lastPanPos  = useRef({ x: 0, y: 0 });
 
   // Stage pan/zoom
   const [stageScale, setStageScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const stageRef = useRef(null);
+  const groupRef  = useRef(null);  // ref to the pan/zoom Group inside Stage
   const stagePosRef = useRef({ x: 0, y: 0 });
   const stageScaleRef = useRef(1);
   useEffect(() => {
@@ -128,6 +134,12 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
   // Permissions panel
   const [showPerms, setShowPerms] = useState(false);
   const [permSaving, setPermSaving] = useState(null);
+
+  // ── Chat state ────────────────────────────────────────────────────────────
+  const [chatOpen,     setChatOpen]     = useState(false);
+  const chatOpenRef = useRef(false); // mirrors chatOpen for use inside stable callbacks
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatUnread,   setChatUnread]   = useState(0);
 
   const saveTimeout = useRef(null);
   const darkModeRef = useRef(darkMode);
@@ -299,11 +311,24 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
     [setShapes, user?.id],
   );
 
-  const { emitAction, saveBoard } = useSocket(
+  const { emitAction, saveBoard, emitChat, setOnChat } = useSocket(
     roomId,
     user?.id,
     handleRemoteAction,
   );
+
+  // Keep chatOpenRef in sync so stable callbacks always see the current value
+  useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
+
+  // Register chat message handler once — uses chatOpenRef so it never goes stale
+  // and does NOT need chatOpen in the deps (avoids re-registering on every toggle).
+  useEffect(() => {
+    setOnChat((msg) => {
+      setChatMessages((prev) => [...prev, msg]);
+      // Increment unread only when panel is closed — read ref, not stale closure
+      setChatUnread((n) => chatOpenRef.current ? n : n + 1);
+    });
+  }, [setOnChat]); // chatOpen intentionally excluded — use the ref
 
   const scheduleSave = useCallback(
     (ns) => {
@@ -401,6 +426,15 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
     }
 
     const tool = activeToolRef.current;
+
+    // Pan: SELECT tool + background click = start panning
+    if (tool === TOOLS.SELECT && onStage && canEdit) {
+      isPanning.current = true;
+      const ptr = stageRef.current.getPointerPosition();
+      lastPanPos.current = { x: ptr.x, y: ptr.y };
+      return;
+    }
+
     if (tool === TOOLS.SELECT || tool === TOOLS.ARROW) return;
 
     // FIX #5: if pencil/eraser/shape tools, NEVER proceed if click is on a shape
@@ -447,6 +481,16 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
     const pos = getCanvasPos();
     const tool = activeToolRef.current;
     setMouseCanvasPos(pos);
+
+    // Pan handling
+    if (isPanning.current) {
+      const ptr = stageRef.current.getPointerPosition();
+      const dx = ptr.x - lastPanPos.current.x;
+      const dy = ptr.y - lastPanPos.current.y;
+      lastPanPos.current = { x: ptr.x, y: ptr.y };
+      setStagePos((p) => ({ x: p.x + dx, y: p.y + dy }));
+      return;
+    }
 
     if (!isDrawing.current) return;
 
@@ -531,6 +575,10 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
 
   // ─── Mouse Up ────────────────────────────────────────────────────────────────
   const handleMouseUp = () => {
+    if (isPanning.current) {
+      isPanning.current = false;
+      return;
+    }
     if (!isDrawing.current) return;
     isDrawing.current = false;
     if (!stageRef.current) return;
@@ -809,6 +857,20 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
     }
   };
 
+  const handleSendChat = useCallback((text) => {
+    const msg = {
+      id:       crypto.randomUUID(),
+      userId:   user?.id,
+      userName: user?.name || user?.email || "Anonymous",
+      text,
+      ts:       Date.now(),
+    };
+    // Add to own list immediately (optimistic)
+    setChatMessages((prev) => [...prev, msg]);
+    // Broadcast to room
+    emitChat(roomId, msg);
+  }, [user, roomId, emitChat]);
+
   const handleClear = () => {
     if (!canEdit) return;
     if (!confirm("Clear the board?")) return;
@@ -846,15 +908,14 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
     const contentH = maxY - minY;
 
     // Save current stage transform
-    const savedScale = stage.scaleX();
-    const savedX = stage.x();
-    const savedY = stage.y();
-
-    // Position stage so the content bounding box starts at screen (0,0) at scale 1
-    // stage.position moves the canvas element; at scale 1 world unit = screen pixel.
-    // To put world point (minX, minY) at screen (0, 0): stagePos = (-minX, -minY)
-    stage.scale({ x: 1, y: 1 });
-    stage.position({ x: -minX, y: -minY });
+    // With Group-based pan/zoom, Stage is always at (0,0).
+    // Move the Group so world point (minX,minY) maps to screen (0,0), at scale 1.
+    const group = groupRef.current;
+    const savedGX = group.x(), savedGY = group.y();
+    const savedGS = group.scaleX();
+    group.scale({ x: 1, y: 1 });
+    group.position({ x: -minX, y: -minY });
+    group.getLayer()?.batchDraw();
 
     const url = stage.toDataURL({
       x: 0,
@@ -865,9 +926,10 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
       mimeType: "image/png",
     });
 
-    // Restore stage transform
-    stage.scale({ x: savedScale, y: savedScale });
-    stage.position({ x: savedX, y: savedY });
+    // Restore Group transform
+    group.scale({ x: savedGS, y: savedGS });
+    group.position({ x: savedGX, y: savedGY });
+    group.getLayer()?.batchDraw();
 
     // Create PDF sized to the content
     const pdf = new jsPDF({
@@ -1017,121 +1079,111 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
           ref={stageRef}
           width={winSize.w}
           height={stageH}
-          scaleX={stageScale}
-          scaleY={stageScale}
-          x={stagePos.x}
-          y={stagePos.y}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onWheel={handleWheel}
-          // FIX (Bug 3 — black rectangle on canvas):
-          // The Stage x/y props move the <canvas> HTML element on screen.
-          // A Konva canvas has a transparent background by default, which some
-          // browsers composite as black (especially when the KonvaRect in Layer 1
-          // uses globalCompositeOperation on its buffer). Setting background on
-          // the canvas element itself ensures the transparent areas show the
-          // correct canvas background color instead of black.
+          // FIX: Stage has NO x/y/scale props. Setting x/y on Stage physically
+          // moves the <canvas> DOM element, leaving a black gap wherever the
+          // canvas doesn't cover. Instead we keep Stage fixed at (0,0) and apply
+          // the pan/zoom transform on a Group wrapping both Layers inside.
           style={{
             cursor: getCursor(activeTool, arrowStart, canEdit),
             background: canvasBg,
-          }}
-          // Stage only pans in SELECT mode — and only when dragging the background
-          draggable={isSelect && canEdit}
-          onDragEnd={(e) => {
-            if (e.target === e.target.getStage())
-              setStagePos({ x: e.target.x(), y: e.target.y() });
+            display: "block",
           }}
         >
-          {/*
-           * Layer 1 — pencil strokes + eraser
-           * FIX #3: KonvaRect painted as full bg so eraser destination-out
-           * shows the canvas background color, not transparent/black.
-           * Size is large enough to cover any pan position.
-           */}
+          {/* Layer 1 — pencil strokes + eraser.
+              Group inside Layer carries the pan/zoom transform.
+              Stage > Layer > Group is the correct Konva hierarchy.
+              Stage has NO x/y/scale — it stays fixed at (0,0) always. */}
           <Layer>
-            <KonvaRect
-              x={-50000}
-              y={-50000}
-              width={100000}
-              height={100000}
-              fill={canvasBg}
-              listening={false}
-            />
-            {drawShapes.map((s) => (
-              <ShapeRenderer
-                key={s.id}
-                shape={s}
-                isSelected={false}
-                draggable={false}
-                canEdit={false}
-                onSelect={() => {}}
-                onChange={() => {}}
-                onHover={() => {}}
-                onHoverEnd={() => {}}
+            <Group ref={groupRef} x={stagePos.x} y={stagePos.y} scaleX={stageScale} scaleY={stageScale}>
+              <KonvaRect
+                x={-50000}
+                y={-50000}
+                width={100000}
+                height={100000}
+                fill={canvasBg}
+                listening={false}
               />
-            ))}
+              {drawShapes.map((s) => (
+                <ShapeRenderer
+                  key={s.id}
+                  shape={s}
+                  isSelected={false}
+                  draggable={false}
+                  canEdit={false}
+                  onSelect={() => {}}
+                  onChange={() => {}}
+                  onHover={() => {}}
+                  onHoverEnd={() => {}}
+                />
+              ))}
+            </Group>
           </Layer>
 
           {/* Layer 2 — shapes + arrows + anchors */}
           <Layer>
-            {mainShapes.map((s) => (
-              <ShapeRenderer
-                key={s.id}
-                shape={s}
-                isSelected={selectedId === s.id}
-                draggable={isSelect}
-                canEdit={canEdit}
-                onSelect={(id) => {
-                  if (isSelect) setSelectedId(id);
-                }}
-                onChange={handleShapeChange}
-                onHover={(id) => {
-                  if (isArrow) setHoveredShapeId(id);
-                }}
-                onHoverEnd={() => setHoveredShapeId(null)}
-              />
-            ))}
+            <Group x={stagePos.x} y={stagePos.y} scaleX={stageScale} scaleY={stageScale}>
+              {mainShapes.map((s) => (
+                <ShapeRenderer
+                  key={s.id}
+                  shape={s}
+                  isSelected={selectedId === s.id}
+                  draggable={isSelect}
+                  canEdit={canEdit}
+                  onSelect={(id) => {
+                    if (isSelect) setSelectedId(id);
+                  }}
+                  onChange={handleShapeChange}
+                  onHover={(id) => {
+                    if (isArrow) setHoveredShapeId(id);
+                  }}
+                  onHoverEnd={() => setHoveredShapeId(null)}
+                />
+              ))}
 
-            {arrows.map((a) => (
-              <Arrow
-                key={a.id}
-                points={a.points}
-                stroke={a.stroke || "#6c63ff"}
-                strokeWidth={Math.max(a.strokeWidth || 2, 2)}
-                fill={a.stroke || "#6c63ff"}
-                pointerLength={16}
-                pointerWidth={14}
-                tension={0}
-                lineCap="round"
-              />
-            ))}
+              {arrows.map((a) => (
+                <Arrow
+                  key={a.id}
+                  points={a.points}
+                  stroke={a.stroke || "#6c63ff"}
+                  strokeWidth={Math.max(a.strokeWidth || 2, 2)}
+                  fill={a.stroke || "#6c63ff"}
+                  pointerLength={16}
+                  pointerWidth={14}
+                  tension={0}
+                  lineCap="round"
+                />
+              ))}
 
-            {isArrow && arrowStart && (
-              <Arrow
-                points={[
-                  arrowStart.x,
-                  arrowStart.y,
-                  mouseCanvasPos.x,
-                  mouseCanvasPos.y,
-                ]}
-                stroke="#6c63ff"
-                strokeWidth={2}
-                fill="#6c63ff"
-                pointerLength={14}
-                pointerWidth={12}
-                dash={[8, 6]}
-                opacity={0.6}
-                tension={0}
-              />
-            )}
+              {isArrow && arrowStart && (
+                <Arrow
+                  points={[
+                    arrowStart.x,
+                    arrowStart.y,
+                    mouseCanvasPos.x,
+                    mouseCanvasPos.y,
+                  ]}
+                  stroke="#6c63ff"
+                  strokeWidth={2}
+                  fill="#6c63ff"
+                  pointerLength={14}
+                  pointerWidth={12}
+                  dash={[8, 6]}
+                  opacity={0.6}
+                  tension={0}
+                />
+              )}
 
-            {isArrow && hoveredShapeId && (
-              <AnchorPoints
-                shape={valid.find((s) => s && s.id === hoveredShapeId)}
-                onAnchorClick={handleAnchorClick}
-              />
-            )}
+              {isArrow && hoveredShapeId && (
+                <AnchorPoints
+                  shape={valid.find((s) => s && s.id === hoveredShapeId)}
+                  onAnchorClick={handleAnchorClick}
+                />
+              )}
+            </Group>
           </Layer>
         </Stage>
 
@@ -1511,6 +1563,23 @@ export default function BoardPage({ roomId, darkMode, toggleDarkMode }) {
           </div>
         )}
       </div>
+
+      {/* ── Chat ── */}
+      <Chat
+        messages={chatMessages}
+        onSend={handleSendChat}
+        currentUserId={user?.id}
+        isOpen={chatOpen}
+        onToggle={() => {
+          setChatOpen((v) => {
+            const next = !v;
+            chatOpenRef.current = next;
+            if (next) setChatUnread(0); // clear badge when opening
+            return next;
+          });
+        }}
+        unread={chatUnread}
+      />
     </div>
   );
 }
@@ -1631,6 +1700,7 @@ export function getAnchorPoint(shape, side) {
 
 function getCursor(tool, arrowStart, canEdit) {
   if (!canEdit) return "default";
+  if (tool === TOOLS.SELECT) return "grab";
   if (tool === TOOLS.PENCIL) return "crosshair";
   if (tool === TOOLS.ERASER) return "cell";
   if (tool === TOOLS.ARROW) return arrowStart ? "crosshair" : "default";
